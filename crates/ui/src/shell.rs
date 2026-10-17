@@ -7940,50 +7940,11 @@ impl Shell {
         // Dropdowns contain themselves to the page pane beside this column.
         settings::widgets::set_sidebar_width(sidebar_width, cx);
         let nav = self.render_settings_nav(section, &theme, window, cx);
-        // Settings swaps the chat footer's account/voice/PR/settings cluster
-        // for a single Back action — everything in that bar is chat chrome
-        // with nothing to do on a settings page (user request), and Back
-        // used to live all the way at the top of the section list.
-        let back_hover_key = "settings-footer-back";
-        let footer = div()
-            .id("settings-footer-back")
-            .debug_selector(|| "settings-footer-back".into())
-            .role(gpui::Role::Button)
-            .aria_label("Back")
-            .tab_index(0)
-            .focus_visible(|s| s.border_2().border_color(theme.accent))
-            .h(px(SIDEBAR_FOOTER_BUTTON_SIZE))
-            .w_full()
-            .flex_none()
-            .rounded(px(8.0))
-            .px(px(Theme::SPACE_SM))
-            .flex()
-            .items_center()
-            .gap(px(Theme::SPACE_SM))
-            .text_size(crate::typography::ui_rems(13.0))
-            .font_weight(gpui::FontWeight::MEDIUM)
-            .cursor_pointer()
-            .text_color(motion::hover_blend(
-                back_hover_key,
-                theme.text_muted,
-                theme.text,
-            ))
-            // Rests at the hover wash so the single footer action reads as
-            // distinct from the section tabs above it (user request); hover
-            // brightens the label only.
-            .bg(theme.glass_hover())
-            .on_hover(motion::hover_listener(back_hover_key))
-            .on_click(cx.listener(|this, _, _, cx| this.close_settings(cx)))
-            .child(
-                icon(icons::ARROW_LEFT)
-                    .size(px(16.0))
-                    .text_color(motion::hover_blend(
-                        back_hover_key,
-                        theme.text_muted,
-                        theme.text,
-                    )),
-            )
-            .child("Back");
+        // The footer is the chat sidebar's own row (account, voice, pull
+        // requests, settings) — identical in and out of Settings (maintainer
+        // request); Back lives at the top of the section list.
+        let footer_theme = Theme::of(cx).clone();
+        let footer = self.render_sidebar_footer_row(&footer_theme, cx);
         let outlet = self.settings_outlet(section, window, cx);
         div()
             .id("settings-page")
@@ -8030,6 +7991,31 @@ impl Shell {
                     .when(self.controls_over_sidebar_left(), |el| {
                         el.pt(px(Theme::TITLEBAR_HEIGHT))
                     })
+                    .child(
+                        div().flex_none().px(px(Theme::SPACE_SM)).child(
+                            settings::widgets::section_tab(
+                                &theme,
+                                false,
+                                0.0,
+                                "settings-back",
+                                "settings-back-hover",
+                            )
+                            .role(gpui::Role::Button)
+                            .aria_label("Back")
+                            .tab_index(0)
+                            .focus_visible(|s| s.border_2().border_color(theme.accent))
+                            .cursor_pointer()
+                            .on_click(cx.listener(|this, _, _, cx| this.close_settings(cx)))
+                            .child(icon(icons::ARROW_LEFT).size(px(16.0)).text_color(
+                                motion::hover_blend(
+                                    "settings-back-hover",
+                                    theme.text_muted,
+                                    theme.text,
+                                ),
+                            ))
+                            .child("Back"),
+                        ),
+                    )
                     .child(div().flex_1().min_h_0().child(nav))
                     .child(div().p(px(Theme::SPACE_SM)).flex_none().child(footer)),
             )
@@ -8101,7 +8087,7 @@ impl Shell {
                             SettingsSection::ALL
                                 .into_iter()
                                 .filter(|item| item.visible_in_nav())
-                                .flat_map(|item| {
+                                .map(|item| {
                                     let index = SettingsSection::ALL
                                         .iter()
                                         .position(|s| *s == item)
@@ -8120,15 +8106,23 @@ impl Shell {
                                         motion::mix(theme.text_muted, theme.text, selection_t),
                                         theme.text,
                                     );
-                                    let tab = settings::widgets::section_tab_with_hover(
+                                    // Nav groups stay separated by spacing
+                                    // alone (maintainer request) — no rule.
+                                    let (enter, leave) = if settings::current(cx).hover_trail {
+                                        (motion::HOVER_TRAIL_ENTER, motion::HOVER_TRAIL_LEAVE)
+                                    } else {
+                                        (motion::HOVER_FADE.total(), motion::HOVER_FADE.total())
+                                    };
+                                    settings::widgets::section_tab_with_hover(
                                         theme,
                                         selected,
                                         selection_t,
                                         key.clone(),
                                         hover_key,
-                                        motion::HOVER_TRAIL_ENTER,
-                                        motion::HOVER_TRAIL_LEAVE,
+                                        enter,
+                                        leave,
                                     )
+                                    .when(item.starts_nav_group(), |el| el.mt(px(Theme::SPACE_LG)))
                                     .role(gpui::Role::Tab)
                                     .aria_label(item.label())
                                     .aria_selected(selected)
@@ -8174,28 +8168,7 @@ impl Shell {
                                             .size(px(16.0))
                                             .text_color(tab_text),
                                     )
-                                    .child(SharedString::from(item.label()));
-                                    // Group separator: the groups were separated
-                                    // by the group-start tab's 16px top margin —
-                                    // 18px of air with the list's 2px flex gaps.
-                                    // The 1px rule takes that gap's middle, so a
-                                    // group's last tab and the next group's first
-                                    // tab sit the same 8.5px from it (user
-                                    // request): 2 + 6.5 above, 6.5 + 2 below.
-                                    let mut group: Vec<AnyElement> = Vec::new();
-                                    if item.starts_nav_group() {
-                                        group.push(
-                                            div()
-                                                .flex_none()
-                                                .mt(px(6.5))
-                                                .mb(px(6.5))
-                                                .h(px(1.0))
-                                                .bg(theme.border)
-                                                .into_any_element(),
-                                        );
-                                    }
-                                    group.push(tab.into_any_element());
-                                    group
+                                    .child(SharedString::from(item.label()))
                                 }),
                         ),
                 ),
@@ -8609,16 +8582,18 @@ impl Shell {
             // active row.
             // Row hover drives BOTH the wash blend and the corner's
             // status→Archive swap (one listener — gpui allows a single
-            // hover listener per element). The wash rides the trail
-            // timing: instant in, slow decay out, so fast travel down
-            // the list leaves a fading wake (user request).
+            // hover listener per element). The wash rides the trail timing
+            // only when the Appearance toggle opts in (off by default,
+            // maintainer request); otherwise the standard symmetric blend.
             .when(!preview, |el| {
                 el.on_hover({
-                    let fade_hover = motion::hover_listener_timed(
-                        fade_key.clone(),
-                        motion::HOVER_TRAIL_ENTER,
-                        motion::HOVER_TRAIL_LEAVE,
-                    );
+                    let trail = crate::settings::current(cx).hover_trail;
+                    let (enter, leave) = if trail {
+                        (motion::HOVER_TRAIL_ENTER, motion::HOVER_TRAIL_LEAVE)
+                    } else {
+                        (motion::HOVER_FADE.total(), motion::HOVER_FADE.total())
+                    };
+                    let fade_hover = motion::hover_listener_timed(fade_key.clone(), enter, leave);
                     let hover_id = row_id.clone();
                     cx.listener(move |this, hovered: &bool, window, cx| {
                         fade_hover(hovered, window, cx);

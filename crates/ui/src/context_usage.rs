@@ -174,9 +174,10 @@ fn usage_lines(usage: Option<ContextUsage>) -> (String, String) {
     }
 }
 
-/// The context ring's popover content: used/window top-left, a horizontal
-/// occupancy bar through the middle (the ring's threshold colors), remaining
-/// bottom-right — twice the old hug-content width (user request).
+/// The context ring's popover content: used/window and remaining sharing the
+/// top row (opposite ends), a horizontal occupancy bar through the middle
+/// (the ring's threshold colors) — twice the old hug-content width (user
+/// request).
 pub fn card(usage: Option<ContextUsage>, theme: &Theme) -> gpui::Div {
     let fraction = usage.and_then(ContextUsage::fraction);
     let (used, remaining) = usage_lines(usage);
@@ -198,7 +199,16 @@ pub fn card(usage: Option<ContextUsage>, theme: &Theme) -> gpui::Div {
                 .px(px(4.0))
                 .flex()
                 .flex_col()
-                .child(line(used))
+                // Used top-left, remaining pulled to the same row's far end
+                // (user request).
+                .child(
+                    div()
+                        .flex()
+                        .justify_between()
+                        .gap(px(12.0))
+                        .child(line(used))
+                        .child(line(remaining)),
+                )
                 .when_some(fraction, |column, fraction| {
                     // Same tiering as the ring chip: the bar turns for
                     // trouble before the text has to say so.
@@ -211,7 +221,7 @@ pub fn card(usage: Option<ContextUsage>, theme: &Theme) -> gpui::Div {
                     };
                     column.child(
                         div()
-                            .my(px(6.0))
+                            .mt(px(6.0))
                             .h(px(4.0))
                             .rounded_full()
                             .overflow_hidden()
@@ -224,10 +234,7 @@ pub fn card(usage: Option<ContextUsage>, theme: &Theme) -> gpui::Div {
                                     .bg(fill),
                             ),
                     )
-                })
-                // Bottom-right: the trailing line hugs the card's far
-                // corner (user request).
-                .child(div().flex().justify_end().child(line(remaining))),
+                }),
         )
 }
 
