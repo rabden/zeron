@@ -7983,14 +7983,16 @@ impl Shell {
                     .flex_none()
                     .flex()
                     .flex_col()
-                    // Titlebar clearance only where window controls actually
-                    // sit over this column's top-left corner (macOS traffic
-                    // lights, Linux left-caption layouts). Right-hand controls
-                    // leave that corner empty — the 38px pad read as dead air
-                    // above the section list (user request).
-                    .when(self.controls_over_sidebar_left(), |el| {
-                        el.pt(px(Theme::TITLEBAR_HEIGHT))
-                    })
+                    // Titlebar clearance where window controls sit over this
+                    // column's top-left corner (macOS traffic lights, Linux
+                    // left-caption layouts). Without left controls a small
+                    // inset still goes in — at zero the Back row's rounded
+                    // top clips against the window edge (user report).
+                    .pt(px(if self.controls_over_sidebar_left() {
+                        Theme::TITLEBAR_HEIGHT
+                    } else {
+                        Theme::SPACE_SM
+                    }))
                     .child(
                         div().flex_none().px(px(Theme::SPACE_SM)).child(
                             settings::widgets::section_tab(
